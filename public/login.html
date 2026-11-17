@@ -146,6 +146,18 @@ h2.big{font-size:clamp(30px,3.6vw,48px);line-height:1.08;max-width:22ch}
 .cta a{display:inline-flex;width:auto;text-decoration:none}
 footer{padding:40px 0 50px;color:var(--muted);font-size:13px;display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between}
 
+/* clean first screen: brand + sign-in only */
+.gate{min-height:100vh;min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:40px 0 70px;position:relative}
+.gate .brand{margin-bottom:6px}
+.gate-card{width:min(440px,100%)}
+.gate-tag{margin:0;color:var(--muted);font-size:14px;text-align:center}
+.cue{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--muted);text-decoration:none}
+.cue:hover{color:#fff}
+.cue svg{width:20px;height:20px;animation:bob 2s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(5px)}}
+.hero{grid-template-columns:minmax(0,1fr)!important;min-height:0!important;padding:90px 0 70px!important;max-width:900px}
+.hero .demo{max-width:900px}
+
 /* entrance */
 .rise{animation:rise .8s cubic-bezier(.2,.8,.2,1) both}
 .d1{animation-delay:.08s}.d2{animation-delay:.16s}.d3{animation-delay:.24s}.d4{animation-delay:.32s}
@@ -157,19 +169,36 @@ footer{padding:40px 0 50px;color:var(--muted);font-size:13px;display:flex;gap:16
 </style>
 </head>
 <body>
-<canvas id="aurora" aria-hidden="true"></canvas>
+<span id="top"></span><canvas id="aurora" aria-hidden="true"></canvas>
 <div class="grain" aria-hidden="true"></div>
 
 <div class="wrap">
-  <nav>
+  <section class="gate">
     <a class="brand" href="/"><span class="logo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l8 6 8-6"/><path d="M4 7v10h9"/><path d="M16 16l2.5 2.5L22 14"/></svg></span><span><b>SensAI Desk</b><span>SAP SERVICE DESK</span></span></a>
-    <span class="sp"></span>
-    <a class="link" href="#how">How it works</a>
-    <a class="link" href="#features">Features</a>
-    <a class="link" href="#signin">Sign in</a>
-  </nav>
+    <div id="signin" class="gate-card">
+      <div class="card rise">
+        <div class="signedin" id="signedIn">
+          <h2>Welcome back</h2><p class="sub">You are already signed in.</p>
+          <div class="who"><span class="av" id="siAv"></span><span><b id="siName"></b><span id="siRole"></span></span></div>
+          <a class="btn" id="goApp" href="/app">Open the desk <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          <button class="ghost" id="switchUser" type="button">Sign in as someone else</button>
+        </div>
+        <form id="loginForm" novalidate>
+          <h2>Sign in</h2>
+          <p class="sub">Use the work email your admin added for you.</p>
+          <div class="err" id="err" role="alert"></div>
+          <label for="email">Work email<input class="in" id="email" name="email" type="email" autocomplete="username" placeholder="name@company.com" required></label>
+          <label for="password">Password <span class="hint" id="pwHint"></span><input class="in" id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••"></label>
+          <button class="btn" id="submit" type="submit">Sign in <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          <div class="pill" id="modeNote"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span id="modeText">Checking sign-in method…</span></div>
+        </form>
+      </div>
+    </div>
+    <p class="gate-tag rise d2">The email-native service desk for SAP support teams</p>
+    <a class="cue" href="#about">See how it works<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></a>
+  </section>
 
-  <header class="hero">
+  <header class="hero" id="about">
     <div>
       <span class="eyebrow rise"><i>LIVE</i>Email-native service desk for SAP</span>
       <h1 class="rise d1">Every SAP email becomes a <span class="g">resolved ticket.</span></h1>
@@ -189,25 +218,6 @@ footer{padding:40px 0 50px;color:var(--muted);font-size:13px;display:flex;gap:16
       <div class="dots" id="dDots" aria-label="Choose example"></div>
     </div>
 
-    <div id="signin">
-      <div class="card rise d2">
-        <div class="signedin" id="signedIn">
-          <h2>Welcome back</h2><p class="sub">You are already signed in.</p>
-          <div class="who"><span class="av" id="siAv"></span><span><b id="siName"></b><span id="siRole"></span></span></div>
-          <a class="btn" id="goApp" href="/app">Open the desk <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-          <button class="ghost" id="switchUser" type="button">Sign in as someone else</button>
-        </div>
-        <form id="loginForm" novalidate>
-          <h2>Sign in</h2>
-          <p class="sub">Use the work email your admin added for you.</p>
-          <div class="err" id="err" role="alert"></div>
-          <label for="email">Work email<input class="in" id="email" name="email" type="email" autocomplete="username" placeholder="name@company.com" required></label>
-          <label for="password">Password <span class="hint" id="pwHint"></span><input class="in" id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••"></label>
-          <button class="btn" id="submit" type="submit">Sign in <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-          <div class="pill" id="modeNote"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span id="modeText">Checking sign-in method…</span></div>
-        </form>
-      </div>
-    </div>
   </header>
 </div>
 
@@ -236,7 +246,7 @@ footer{padding:40px 0 50px;color:var(--muted);font-size:13px;display:flex;gap:16
       <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></div><h3>Users &amp; roles</h3><p>Admins add agents with the modules they handle; the desk suggests the right person every time.</p></div>
       <div class="feat"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></div><h3>Audit log</h3><p>Who changed what, and when — tickets, users, sign-ins and settings, visible to admins.</p></div>
     </div>
-    <div class="cta"><h2>Your SAP desk is one sign-in away.</h2><p>Sign in with your work email to open your queue.</p><a class="btn" href="#signin" style="max-width:240px">Sign in <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></div>
+    <div class="cta"><h2>Your SAP desk is one sign-in away.</h2><p>Sign in with your work email to open your queue.</p><a class="btn" href="#top" style="max-width:240px">Sign in <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></div>
   </section>
   <footer><span>© SensAI Desk · SAP Service Desk</span><span>Need access? Ask your service desk admin.</span></footer>
 </div>
