@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SensAI Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 x2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%235B5CF6%22/%3E%3Cstop offset=%221%22 stop-color=%22%23FF5F8A%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22url(%23g)%22/%3E%3Cpath d=%22M8 11l8 6 8-6M8 11v10h9%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.4%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <div class="logo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l8 6 8-6"/><path d="M4 7v10h9"/><path d="M16 16l2.5 2.5L22 14"/></svg></div>
+      <div><b>SensAI Desk</b><span>SAP SUPPORT PORTAL</span></div>
+      <button type="button" class="side-toggle" id="sideToggle" title="Collapse menu (Ctrl+B)" aria-label="Collapse menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg></button>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="engine" id="engineCard"></div>
+    <div class="side-foot">
+      <button type="button" id="themeBtn">Theme</button>
+      <button type="button" id="resetBtn">Clear data</button>
+    </div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <div class="ttl"><h1 id="vTitle">Overview</h1><div class="sub" id="vSub"></div></div>
+      <div id="userChip"></div>
+      <span class="live-pill" id="livePill"><span class="dot"></span>Live</span>
+      <div class="topsearch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="topSearch" readonly placeholder="Search anything…" aria-label="Search tickets, emails, t-codes, people (Ctrl+K)"><kbd>Ctrl K</kbd></div>
+      <button class="btn btn-grad" type="button" data-act="compose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg><span class="lbl">Send test email</span></button>
+    </header>
+    <section class="view" id="view"></section>
+  </main>
+</div>
+<div id="drawerHost"></div>
+<div id="modalHost"></div>
+<div id="toasts" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>

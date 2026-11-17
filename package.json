@@ -1,0 +1,22 @@
+{
+  "name": "sap-ticket-ai",
+  "version": "1.0.0",
+  "description": "Demo: receive emails, parse them with the Claude API into SAP-module tickets",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test-mail": "node scripts/test-mail.js"
+  },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.9.0",
+    "express": "^4.21.2",
+    "imapflow": "^1.0.164",
+    "mailparser": "^3.7.1",
+    "nodemailer": "^6.10.1"
+  }
+}

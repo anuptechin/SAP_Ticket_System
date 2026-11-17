@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Add files to your ticket — SensAI Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@600&display=swap">
+<style>
+:root{--ink:#07051A;--card:#120E2A;--line:rgba(255,255,255,.12);--fg:#F3F1FF;--fg-2:#C9C4EA;--muted:#8D87B3;--a:#6D5CFF;--b:#B04DF6;--c:#FF5F8A;--cyan:#3EE3F2;--ok:#34D399;--bad:#FF8A9E;
+  --grad:linear-gradient(115deg,var(--a),var(--b) 50%,var(--c));color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:radial-gradient(900px 500px at 15% -10%,rgba(109,92,255,.35),transparent 60%),radial-gradient(700px 420px at 100% 110%,rgba(255,95,138,.22),transparent 60%),var(--ink);color:var(--fg);font-family:'Plus Jakarta Sans',ui-sans-serif,system-ui,sans-serif;font-size:15px;line-height:1.55}
+main{max-width:640px;margin:0 auto;padding:48px max(18px,4vw) 60px}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:34px}
+.logo{width:34px;height:34px;border-radius:10px;background:var(--grad);display:grid;place-items:center}
+.brand b{font-family:Sora,sans-serif;font-size:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:30px 28px}
+h1{font-family:Sora,sans-serif;font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+.id{font-family:'JetBrains Mono',monospace;font-weight:600;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.ttl{color:var(--fg-2);margin:0 0 22px}
+.drop{border:2px dashed rgba(176,77,246,.5);border-radius:18px;padding:34px 20px;text-align:center;cursor:pointer;transition:background .15s,border-color .15s}
+.drop:hover,.drop.over{background:rgba(176,77,246,.1);border-color:var(--b)}
+.drop svg{width:34px;height:34px;color:var(--b)}
+.drop b{display:block;font-size:16px;margin:10px 0 4px}
+.drop span{color:var(--muted);font-size:13px}
+.drop:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+ul{list-style:none;margin:20px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+li{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid var(--line);font-size:13.5px}
+li .n{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+li .s{color:var(--muted);font-size:12px;white-space:nowrap}
+li .st{font-size:12px;font-weight:700;white-space:nowrap}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.wait{color:var(--cyan)}
+.note{margin-top:22px;font-size:13px;color:var(--muted)}
+.err{padding:14px 16px;border-radius:14px;background:rgba(255,95,138,.12);border:1px solid rgba(255,95,138,.3);color:#FFC2CE}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><span class="logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l8 6 8-6"/><path d="M4 7v10h9"/><path d="M16 16l2.5 2.5L22 14"/></svg></span><b>SensAI Desk</b></div>
+  <div class="card" id="card"><p class="note">Loading…</p></div>
+</main>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const id = decodeURIComponent(location.pathname.split('/').pop()), k = new URLSearchParams(location.search).get('k') || '';
+  const api = `/api/public/upload/${encodeURIComponent(id)}?k=${encodeURIComponent(k)}`;
+  const kb = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  const OK = /\.(png|jpe?g|gif|webp|bmp|pdf|txt|log|csv|xlsx?|docx?|pptx?|zip|eml|msg)$/i;
+  fetch(api).then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.error); return j; }).then(t => {
+    $('#card').innerHTML = `<h1>Add files to <span class="id">${esc(t.id)}</span></h1><p class="ttl">${esc(t.title)}</p>
+      ${t.closed ? '<div class="err">This ticket is closed. Reply to the closure email if the problem is back.</div>' : `
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose files to upload">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+        <b>Drop screenshots or files here</b><span>or click to choose · images, PDF, Office, text, logs, zip · up to 15 MB each</span>
+        <input type="file" id="file" multiple hidden accept=".png,.jpg,.jpeg,.gif,.webp,.bmp,.pdf,.txt,.log,.csv,.xls,.xlsx,.doc,.docx,.ppt,.pptx,.zip,.eml,.msg">
+      </div>`}
+      <ul id="list">${t.files.map(f => `<li><span class="n">${esc(f.name)}</span><span class="s">${kb(f.size)}</span><span class="st ok">Added</span></li>`).join('')}</ul>
+      <p class="note">Files you add here appear on the ticket for the SAP support team straight away. Only people with this link can add files; nothing else about the ticket is shown here.</p>`;
+    const drop = $('#drop'); if (!drop) return;
+    const pick = $('#file');
+    drop.onclick = () => pick.click();
+    drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick.click(); } };
+    pick.onchange = () => { send([...pick.files]); pick.value = ''; };
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+    drop.ondragleave = () => drop.classList.remove('over');
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); send([...e.dataTransfer.files]); };
+    // screenshots can also be pasted straight from the clipboard
+    document.addEventListener('paste', e => { const fs = [...(e.clipboardData?.files || [])].map((f, i) => f.name && f.name !== 'image.png' ? f : new File([f], `screenshot-${Date.now()}-${i + 1}.png`, { type: f.type })); if (fs.length) send(fs); });
+  }).catch(e => { $('#card').innerHTML = `<div class="err">${esc(e.message || 'This upload link is not valid.')}</div>`; });
+
+  async function send(files) {
+    for (const f of files) {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="n">${esc(f.name)}</span><span class="s">${kb(f.size)}</span><span class="st wait">Uploading…</span>`;
+      $('#list').prepend(li); const st = li.querySelector('.st');
+      if (!OK.test(f.name)) { st.className = 'st bad'; st.textContent = 'Type not accepted'; continue; }
+      if (f.size > 15 * 1024 * 1024) { st.className = 'st bad'; st.textContent = 'Over 15 MB'; continue; }
+      try {
+        const r = await fetch(api, { method: 'POST', headers: { 'Content-Type': f.type || 'application/octet-stream', 'X-Filename': encodeURIComponent(f.name) }, body: f });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error);
+        st.className = 'st ok'; st.textContent = 'Added';
+      } catch (e) { st.className = 'st bad'; st.textContent = e.message || 'Failed'; }
+    }
+  }
+})();
+</script>
+</body>
+</html>
