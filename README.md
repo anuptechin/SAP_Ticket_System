@@ -4,6 +4,10 @@ An email-native service desk for SAP support. It reads the support mailbox, unde
 
 ## Run it
 
+Double-click **start.bat** (installs dependencies on first run, starts the desk in the background and opens it in your browser). Double-click **stop.bat** to stop it. The server log is in `dataserver.log`.
+
+Or from a terminal:
+
 ```powershell
 npm install
 copy .env.example .env     # then fill in your values
