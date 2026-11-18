@@ -29,10 +29,11 @@ const IC = {
 const ico = (k, a = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${a}>${IC[k]}</svg>`;
 
 let META = null, S = { health: {}, tickets: [], emails: [], agents: [] };
-const UI = { view: 'dashboard', openId: null, iSel: null, iFilter: 'all', tQ: '', tGroup: 'all', tMod: 'all', tCat: 'all', tPrio: 'all', tAsg: 'all', tStatus: 'open', tMode: 'table', cmp: 'reply', labResults: null, labBusy: false };
+const UI = { view: 'dashboard', openId: null, iSel: null, iFilter: 'all', tQ: '', tGroup: 'all', tMod: 'all', tCat: 'all', tPrio: 'all', tAsg: 'all', tStatus: 'open', tMode: 'table', tSort: { key: 'created', dir: 'desc' }, cmp: 'reply',labResults: null, labBusy: false };
 try { Object.assign(UI, JSON.parse(localStorage.getItem('sapai-ui') || '{}'), { openId: null, labResults: null, labBusy: false }); } catch { /* ignore */ }
 UI.me = null; // set from the signed-in session at start-up
-const saveUI = () => { try { localStorage.setItem('sapai-ui', JSON.stringify({ tMode: UI.tMode })); } catch { /* ignore */ } };
+const saveUI = () => { try { localStorage.setItem('sapai-ui', JSON.stringify({ tMode: UI.tMode, tSort: UI.tSort })); } catch { /* ignore */ } };
+if (!UI.tSort || !UI.tSort.key) UI.tSort = { key: 'created', dir: 'desc' };
 
 /* ---------- API ---------- */
 async function api(method, url, body, raw) {
@@ -231,7 +232,30 @@ function filtered() {
     if (!['all', 'me', 'none'].includes(UI.tAsg) && t.assigneeId !== UI.tAsg) return false;
     if (q && !matchAll(ticketHaystack(t), q)) return false;
     return true;
-  }).sort((a, b) => (DONE.includes(a.status) - DONE.includes(b.status)) || a.priority.localeCompare(b.priority) || b.createdAt - a.createdAt);
+  }).sort(ticketSorter());
+}
+// ---- column sorting: click a header to sort, click again to reverse. Default: newest ticket first. ----
+const SORT_COLS = [['created', 'ID'], ['title', 'Request'], ['module', 'Module'], ['component', 'Component'], ['category', 'Category'], ['priority', 'Priority'], ['status', 'Status'], ['assignee', 'Assigned to'], ['sla', 'SLA']];
+const FIRST_DIR = { created: 'desc' }; // first click on ID shows newest first; other columns start A→Z / most urgent first
+function ticketSorter() {
+  const { key, dir } = UI.tSort, sign = dir === 'asc' ? 1 : -1;
+  const text = v => String(v || '').toLowerCase();
+  const statusRank = s => { const i = (META.statuses || []).indexOf(s); return i < 0 ? 99 : i; };
+  const slaLeft = t => DONE.includes(t.status) ? Infinity : t.slaDueAt - Date.now(); // resolved/closed tickets sort after open ones
+  const val = {
+    created: t => t.createdAt || Number(String(t.id).replace(/\D/g, '')),
+    title: t => text(t.title), module: t => text(t.module), component: t => text(t.subModule), category: t => text(t.category),
+    priority: t => t.priority, status: t => statusRank(t.status), assignee: t => t.assignee ? text(t.assignee) : '￿', sla: slaLeft,
+  }[key] || (t => t.createdAt);
+  return (a, b) => {
+    const x = val(a), y = val(b);
+    const c = x === y ? 0 : x === Infinity ? 1 : y === Infinity ? -1 : x < y ? -1 : 1;
+    return (key === 'sla' && (x === Infinity || y === Infinity) ? c : c * sign) || (b.createdAt - a.createdAt); // ties: newest first
+  };
+}
+function sortHeader(key, label) {
+  const on = UI.tSort.key === key, dir = on ? UI.tSort.dir : null;
+  return `<th class="sortable${on ? ' on' : ''}" aria-sort="${on ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}"><button type="button" data-tsort="${key}" title="Sort by ${label.toLowerCase()}">${label}<span class="arr">${on ? (dir === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>`;
 }
 function vTickets() {
   const opt = (v, list, lab) => `<option value="all">${lab}</option>` + list.map(([k, l]) => `<option value="${esc(k)}" ${v === k ? 'selected' : ''}>${esc(l)}</option>`).join('');
@@ -256,7 +280,7 @@ function tBody() {
     el.innerHTML = `<div class="board">${META.statuses.map(c => { const it = L.filter(t => t.status === c); return `<div class="col" data-col="${c}"><h4>${statusPill(c)}<span>${it.length}</span></h4>${it.map(t => `<div class="kc" draggable="true" data-drag="${t.id}" data-open="${t.id}"><div class="r"><span class="idl">${t.id}</span><span class="sp"></span>${prioPill(t.priority)}</div><div class="tt">${esc(t.title)}</div><div class="r">${modChip(t.module)}<span class="muted" style="font-size:11.5px">${esc(t.subModule || '')}</span></div><div class="r"><span class="cat">${esc(t.category)}</span><span class="sp"></span>${slaChip(t)}</div><div class="r">${t.assignee ? avatar(t.assignee) + '<span style="font-size:11.5px;font-weight:600">' + esc(t.assignee) + '</span>' : '<span class="muted" style="font-size:11.5px">Unassigned</span>'}</div></div>`).join('')}</div>`; }).join('')}</div>`;
     return;
   }
-  el.innerHTML = `<div class="card"><div class="tblw"><table class="tbl"><thead><tr><th>ID</th><th>Request</th><th>Module</th><th>Component</th><th>Category</th><th>Priority</th><th>Status</th><th>Assigned to</th><th>SLA</th></tr></thead><tbody>
+  el.innerHTML = `<div class="card"><div class="tblw"><table class="tbl"><thead><tr>${SORT_COLS.map(([key, label]) => sortHeader(key, label)).join('')}</tr></thead><tbody>
   ${L.map(t => `<tr data-open="${t.id}"><td><span class="idl">${t.id}</span></td><td><div class="tt">${esc(t.title)}</div><div class="sm">${esc(t.requester.name)}${t.details?.requester?.department ? ' · ' + esc(t.details.requester.department) : ''} · ${ago(t.createdAt)}${(t.attachments || []).length ? ' · ' + t.attachments.length + ' attachment' + (t.attachments.length > 1 ? 's' : '') : ''}</div></td><td>${modChip(t.module)}</td><td class="sm">${esc(t.subModule || '—')}</td><td><span class="cat">${esc(t.category)}</span></td><td>${prioPill(t.priority)}</td><td>${statusPill(t.status)}</td><td><div class="who">${t.assignee ? avatar(t.assignee) : ''}<div class="t"><b>${esc(t.assignee || 'Unassigned')}</b><span>${esc(t.assignmentGroup)}</span></div></div></td><td>${slaChip(t)}</td></tr>`).join('')}
   </tbody></table></div>${L.length ? '' : '<div class="empty"><b>No tickets match</b>Clear a filter or search for something else.</div>'}</div>`;
 }
@@ -852,7 +876,7 @@ function bindDrop(zoneSel, inputSel, onFiles) {
 
 /* ---------- events ---------- */
 document.addEventListener('click', async ev => {
-  const el = ev.target.closest('[data-act],[data-open],[data-mail],[data-if],[data-sel],[data-tg],[data-ts],[data-mode],[data-fmod],[data-status],[data-cmp],[data-csample],[data-lsample],[data-reprocess],[data-copy],[data-fagent],[data-go],[data-setmode],[data-mailtest],[data-edituser],[data-toggleuser],[data-confirmdeact],[data-aarea],[data-lightbox],[data-setauth]');
+  const el = ev.target.closest('[data-act],[data-open],[data-mail],[data-if],[data-sel],[data-tg],[data-ts],[data-mode],[data-tsort],[data-fmod],[data-status],[data-cmp],[data-csample],[data-lsample],[data-reprocess],[data-copy],[data-fagent],[data-go],[data-setmode],[data-mailtest],[data-edituser],[data-toggleuser],[data-confirmdeact],[data-aarea],[data-lightbox],[data-setauth]');
   if (!el) return; const d = el.dataset;
   if (d.open) { closeModal(); openTicket(d.open); return; }
   if (d.mail) { closeModal(); UI.iSel = d.mail; UI.iFilter = 'all'; if (UI.openId) closeDrawer(); if (UI.view !== 'inbox') location.hash = 'inbox'; else render(); return; }
@@ -861,6 +885,7 @@ document.addEventListener('click', async ev => {
   if (d.tg) { UI.tGroup = d.tg; UI.tMod = 'all'; vTickets(); return; }
   if (d.ts) { UI.tStatus = d.ts; vTickets(); return; }
   if (d.mode) { UI.tMode = d.mode; saveUI(); vTickets(); return; }
+  if (d.tsort) { const s = UI.tSort; UI.tSort = s.key === d.tsort ? { key: s.key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: d.tsort, dir: FIRST_DIR[d.tsort] || 'asc' }; saveUI(); tBody(); return; }
   if (d.setauth) { try { S.settings = await api('POST', '/api/settings', { authMode: d.setauth }); toast(d.setauth === 'password' ? 'Passwords are now required to sign in' : 'Passwordless sign-in is on'); render(); } catch (err) { toast(err.message, true); } return; }
   if (d.lightbox) { lightbox(d.lightbox, d.name); return; }
   if (d.aarea) { UI.audit.area = d.aarea; vAudit(); return; }
