@@ -33,6 +33,25 @@ Optional friendly address on one machine: add `127.0.0.1 sensaidesk.com` to `C:\
 | **Audit log** (admin) | Ticket actions, user changes, settings changes, sign-ins. Passwords are never logged. |
 | **Settings** (admin) | Parsing level, sign-in method, IMAP and SMTP with *Test connection*. Saved to `.env` and applied without a restart. |
 
+## License
+
+The desk needs a license key (**Settings → License**, admins only). Keys are signed with a private key that only the vendor holds; the app can check keys but cannot create them, so keys cannot be forged or edited.
+
+- **Demo**: a number of days. **Annual**: 365 days, or a custom length.
+- **Users**: the number of active users allowed, admins included. Disabled users do not count.
+- Without a valid key only admins can sign in (to enter a key); incoming emails still become tickets. A banner warns 3 days (demo) or 30 days (annual) before expiry.
+
+Issuing keys (vendor machine only):
+
+```powershell
+npm run license -- keygen                                   # once: creates keys/license-private.pem (keep secret, back it up)
+npm run license -- demo   --days 30 --users 10 --customer "Acme Ltd"
+npm run license -- annual           --users 50 --customer "Acme Ltd"
+npm run license -- inspect SDK1....                         # show what a key contains
+```
+
+`keys/` is never committed. Losing the private key means you cannot issue new keys for existing installs; running `keygen --force` invalidates every key already issued.
+
 ## Configuration (`.env`)
 
 See `.env.example`. The main keys:

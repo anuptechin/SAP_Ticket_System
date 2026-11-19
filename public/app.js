@@ -132,7 +132,7 @@ function renderNav() {
 }
 function render() {
   if (!META) return;
-  renderNav(); renderMe();
+  renderNav(); renderMe(); renderLicenseBanner();
   const [t, , sub] = VIEWS[UI.view];
   $('#vTitle').textContent = t; $('#vSub').textContent = sub;
   // While someone is typing in the ticket filters, refresh only the results so the box keeps focus and text.
@@ -345,7 +345,7 @@ function vUsers() {
   const admin = meIsAdmin();
   const open = id => S.tickets.filter(t => t.assigneeId === id && !DONE.includes(t.status)).length;
   $('#view').innerHTML = `
-  <div class="toolbar"><span class="muted">${L.filter(a => a.active !== false).length} active · ${L.filter(a => a.active === false).length} inactive</span><span class="sp"></span>
+  <div class="toolbar"><span class="muted">${L.filter(a => a.active !== false).length}${S.license?.maxUsers ? ` of ${S.license.maxUsers} licensed users active` : ' active'} · ${L.filter(a => a.active === false).length} inactive</span><span class="sp"></span>
     ${admin ? `<button class="btn btn-grad" data-act="addUser">${ico('plus')}Add user</button>` : `<span class="note" style="padding:6px 10px">View only — ask an admin to make changes</span>`}</div>
   <div class="card"><div class="tblw"><table class="tbl users"><thead><tr><th>User</th><th>Role & team</th><th>Modules</th><th>Access</th><th>Password</th><th>Open tickets</th><th>Status</th><th></th></tr></thead><tbody>
   ${L.map(a => `<tr class="${a.active === false ? 'inactive' : ''}" style="cursor:default">
@@ -453,7 +453,7 @@ async function vSetup() {
   const stat = i.status === 'connected' ? ['st-done', 'Connected'] : i.status === 'error' ? ['st-wait', 'Not reachable'] : i.status === 'polling' || i.status === 'starting' ? ['st-new', 'Checking…'] : ['st-new', 'Off'];
   const pw = (id, has) => `<input class="in" id="${id}" type="password" autocomplete="new-password" placeholder="${has ? '•••••••• (saved — leave blank to keep)' : 'Password'}">`;
   el.innerHTML = `<div class="settings">${meIsAdmin() ? '' : '<div class="note">View only — ask an admin to change settings.</div>'}
-  <section class="card set">
+${licenseCard()}  <section class="card set">
     <div class="set-h"><div><h3>Ticket parsing</h3><p>How much is extracted from each incoming email.</p></div></div>
     <div class="set-b">
       <div class="choice">
@@ -768,6 +768,51 @@ function userMenu() {
     <div class="mb"><button class="btn btn-grad" data-act="signOut" style="justify-content:center">Sign out</button></div>`, 'small');
 }
 
+/* ---------- license ---------- */
+function licenseCard() {
+  const L = S.license || { state: 'none' };
+  const pill = { valid: L.expiringSoon ? ['st-wait', `Expires in ${L.daysLeft} day${L.daysLeft === 1 ? '' : 's'}`] : ['st-done', 'Active'], expired: ['st-wait', 'Expired'], invalid: ['st-wait', 'Invalid key'], notyet: ['st-wait', 'Not valid yet'], none: ['st-new', 'No license'] }[L.state] || ['st-new', L.state];
+  const seats = L.maxUsers ? Math.min(100, Math.round(L.activeUsers / L.maxUsers * 100)) : 0;
+  return `<section class="card set">
+    <div class="set-h"><div><h3>License</h3><p>Your SensAI Desk license key, its validity and the number of users it allows.</p></div><span class="pill ${pill[0]}">${pill[1]}</span></div>
+    <div class="set-b">
+      ${L.customer ? `<div class="lic">
+        <div><span>Licensed to</span><b>${esc(L.customer)}</b></div>
+        <div><span>Type</span><b>${L.type === 'demo' ? 'Demo' : 'Annual'}</b></div>
+        <div><span>Valid until</span><b>${new Date(L.expires).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</b><small>${L.state === 'valid' ? `${L.daysLeft} day${L.daysLeft === 1 ? '' : 's'} left` : ''}</small></div>
+        <div><span>Users</span><b class="${L.overLimit ? 'over' : ''}">${L.activeUsers} of ${L.maxUsers}</b><em class="bar"><i style="width:${seats}%"></i></em><small>active users, admins included</small></div>
+      </div>` : ''}
+      ${L.state !== 'valid' && L.message ? `<div class="note warn">${esc(L.message)} ${L.state === 'none' || L.state === 'expired' ? 'Until a valid key is entered, only admins can sign in. Incoming emails are still turned into tickets.' : ''}</div>` : ''}
+      ${L.overLimit ? `<div class="note warn">${L.activeUsers} users are active but the license allows ${L.maxUsers}. Disable users on the Users page, or apply a key with more users.</div>` : ''}
+      <form id="licForm" style="display:flex;flex-direction:column;gap:10px">
+        <label class="f">${L.customer ? 'Replace with a new key' : 'License key'}<textarea class="in mono" id="licKey" rows="3" placeholder="SDK1.…" spellcheck="false" style="min-height:0;font-size:12px"></textarea></label>
+        <div id="licMsg"></div>
+        <div class="set-f">${L.id ? `<span class="muted small" style="margin-right:auto">Key ID ${esc(L.id)}</span>` : ''}<button class="btn btn-grad" type="submit">Apply key</button></div>
+      </form>
+    </div>
+  </section>
+
+`;
+}
+async function applyLicense(form) {
+  const key = $('#licKey').value.trim();
+  if (!key) { $('#licMsg').innerHTML = '<div class="note bad">Paste the license key first.</div>'; return; }
+  const btn = form.querySelector('[type=submit]'); btn.disabled = true;
+  try {
+    S.license = await api('POST', '/api/license', { key });
+    toast(`License applied: ${S.license.type === 'demo' ? 'Demo' : 'Annual'}, ${S.license.maxUsers} users, ${S.license.daysLeft} days`);
+    render();
+  } catch (err) { $('#licMsg').innerHTML = `<div class="note bad">${esc(err.message)}</div>`; btn.disabled = false; }
+}
+function renderLicenseBanner() {
+  const el = $('#licBanner'); if (!el) return;
+  const L = S.license || {}, admin = S.me?.access === 'admin';
+  let msg = '';
+  if (L.state && L.state !== 'valid') msg = admin ? `${L.state === 'none' ? 'No license key has been entered' : L.state === 'expired' ? 'The license has expired' : 'The license key is not valid'}. Only admins can sign in until a key is applied in <a href="#setup">Settings → License</a>.` : '';
+  else if (L.expiringSoon) msg = `The ${L.type === 'demo' ? 'demo' : 'annual'} license expires in <b>${L.daysLeft} day${L.daysLeft === 1 ? '' : 's'}</b>.${admin ? ' Apply a new key in <a href="#setup">Settings → License</a>.' : ' Please tell your admin.'}`;
+  el.innerHTML = msg ? `<div class="licbar ${L.state === 'valid' ? 'soon' : 'bad'}">${msg}</div>` : '';
+}
+
 /* ---------- MODALS ---------- */
 const modal = (html, cls = '') => { $('#modalHost').innerHTML = `<div class="modal ${cls}"><div class="scrim" data-act="closeModal"></div><div class="mbox">${html}</div></div>`; };
 const closeModal = () => { $('#modalHost').innerHTML = ''; };
@@ -968,6 +1013,7 @@ document.addEventListener('submit', ev => {
   ev.preventDefault();
   if (ev.target.id === 'cForm') sendCompose();
   if (ev.target.id === 'labForm') runLab();
+  if (ev.target.id === 'licForm') { applyLicense(ev.target); return; }
   if (ev.target.id === 'userForm') { saveUser(ev.target); return; }
   if (ev.target.id === 'imapForm') { saveMail('imap', ev.target); return; }
   if (ev.target.id === 'smtpForm') { saveMail('smtp', ev.target); return; }

@@ -13,6 +13,7 @@ import { smtpInfo } from './lib/mailer.js';
 import { getMailSettings, saveMailSettings, testImap, testSmtp, startInbound } from './lib/mail-settings.js';
 import { requireUser, login, logout, currentUser, authMode, publicUser, hashPassword, passwordProblem } from './lib/auth.js';
 import { saveAttachments, sendAttachment } from './lib/attachments.js';
+import { verifyKey, licenseStatus, licenseBanner, seatsLeft } from './lib/license.js';
 
 const PORT = Number(process.env.PORT) || 4100;
 const PUB = path.resolve('public');
@@ -50,7 +51,8 @@ const publicAgent = a => { const { passwordHash, ...rest } = a; return { ...rest
 // ---------- read ----------
 app.get('/api/health', (req, res) => res.json(health()));
 app.get('/api/meta', (req, res) => res.json({ groups: GROUPS, modules: MODULES.map(({ kw, ...m }) => m), categories: CATEGORIES, priorities: PRIORITIES, statuses: STATUSES, resolutionCodes: RESOLUTION_CODES, sla: SLA_HOURS, samples: SAMPLES }));
-app.get('/api/state', (req, res) => res.json({ me: publicUser(req.user), health: health(), settings: store.settings(), tickets: store.tickets().map(({ uploadKey, ...t }) => t), emails: store.emails(), agents: store.publicAgents() }));
+const publicSettings = () => { const { licenseKey, ...s } = store.settings(); return s; };
+app.get('/api/state', (req, res) => res.json({ me: publicUser(req.user), license: store.isAdmin(req.user.id) ? licenseStatus() : licenseBanner(), health: health(), settings: publicSettings(), tickets: store.tickets().map(({ uploadKey, ...t }) => t), emails: store.emails(), agents: store.publicAgents() }));
 app.get('/api/agents', (req, res) => res.json(store.publicAgents()));
 app.get('/api/tickets/:id', (req, res) => { const t = store.ticket(req.params.id); if (!t) return res.status(404).json({ error: 'Ticket not found' }); const { uploadKey, ...rest } = t; res.json(rest); });
 
@@ -64,6 +66,7 @@ app.post('/api/agents', (req, res) => {
   if (!adminOnly(req, res)) return;
   const { actor, password, ...b } = req.body;
   if (password && passwordProblem(password)) return res.status(400).json({ error: passwordProblem(password) });
+  if (b.active !== false && seatsLeft() <= 0) return res.status(400).json({ error: seatError() });
   const r = store.addAgent(b); if (r.errors) return res.status(400).json({ error: r.errors.join('. ') });
   applyPassword(r.agent, password);
   store.addAudit({ who: actorName(req), area: 'Users', action: 'User added', target: r.agent.name, detail: `${r.agent.role} · ${r.agent.team} · ${r.agent.access === 'admin' ? 'Admin' : 'Agent'}${password ? ' · password set' : ''}` });
@@ -74,6 +77,7 @@ app.patch('/api/agents/:id', (req, res) => {
   const { actor, password, ...b } = req.body;
   if (password && passwordProblem(password)) return res.status(400).json({ error: passwordProblem(password) });
   const before = { ...store.agent(req.params.id) };
+  if (before.active === false && b.active === true && seatsLeft() <= 0) return res.status(400).json({ error: seatError() });
   const r = store.updateAgent(req.params.id, b); if (r.errors) return res.status(400).json({ error: r.errors.join('. ') });
   applyPassword(r.agent, password);
   const a = r.agent;
@@ -86,7 +90,22 @@ app.patch('/api/agents/:id', (req, res) => {
 });
 
 // ---------- settings (admin) ----------
-app.get('/api/settings', (req, res) => res.json(store.settings()));
+app.get('/api/settings', (req, res) => res.json(publicSettings()));
+
+// ---------- license (admin) ----------
+const seatError = () => { const s = licenseStatus(); return `Your license allows ${s.maxUsers} active users (admins included) and all are in use. Disable a user or apply a license with more users.`; };
+app.get('/api/license', (req, res) => res.json(store.isAdmin(req.user.id) ? licenseStatus() : licenseBanner()));
+app.post('/api/license', (req, res) => {
+  if (!adminOnly(req, res)) return;
+  const v = verifyKey(req.body?.key);
+  if (!v.ok) return res.status(400).json({ error: v.error });
+  if (v.payload.expires < Date.now()) return res.status(400).json({ error: `This key expired on ${new Date(v.payload.expires).toDateString()}. Ask for a new key.` });
+  store.updateSettings({ licenseKey: v.key });
+  const p = v.payload;
+  store.addAudit({ who: actorName(req), area: 'Settings', action: 'License key applied', target: p.customer, detail: `${p.type === 'demo' ? 'Demo' : 'Annual'} · ${p.maxUsers} users · valid until ${new Date(p.expires).toDateString()} · ${p.id}` });
+  store.bus.emit('change', { type: 'settings' });
+  res.json(licenseStatus());
+});
 app.post('/api/settings', (req, res) => {
   if (!adminOnly(req, res)) return;
   const prev = store.settings();
