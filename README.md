@@ -44,13 +44,18 @@ The desk needs a license key (**Settings → License**, admins only). Keys are s
 Issuing keys (vendor machine only):
 
 ```powershell
-npm run license -- keygen                                   # once: creates keys/license-private.pem (keep secret, back it up)
+npm run license -- keygen                                   # once: main signing key   keys/license-private.pem
+npm run license -- keygen-recovery                          # once: recovery key       keys/license-recovery.pem  → store offline
 npm run license -- demo   --days 30 --users 10 --customer "Acme Ltd"
 npm run license -- annual           --users 50 --customer "Acme Ltd"
+npm run license -- annual ... --use recovery                # sign with the recovery key (automatic if the main key is missing)
+npm run license -- list                                     # every key issued (keys/issued-licenses.csv)
 npm run license -- inspect SDK1....                         # show what a key contains
 ```
 
-`keys/` is never committed. Losing the private key means you cannot issue new keys for existing installs; running `keygen --force` invalidates every key already issued.
+The app trusts both the main and the recovery key. If the main private key is lost, restore the recovery key from its offline copy and keep issuing keys; installed desks need no update. `keys/` is never committed: back up `license-private.pem` and `issued-licenses.csv`, and keep `license-recovery.pem` offline only.
+
+**Issuing a key from another computer:** clone the repo, `npm install`, copy the backed-up `.pem` into `keys/`, run `npm run license -- annual ...`, and paste the key into Settings → License on production.
 
 ## Configuration (`.env`)
 
