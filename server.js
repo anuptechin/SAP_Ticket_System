@@ -14,6 +14,7 @@ import { getMailSettings, saveMailSettings, testImap, testSmtp, startInbound } f
 import { requireUser, login, logout, currentUser, authMode, publicUser, hashPassword, passwordProblem } from './lib/auth.js';
 import { saveAttachments, sendAttachment } from './lib/attachments.js';
 import { verifyKey, licenseStatus, licenseBanner, seatsLeft } from './lib/license.js';
+import { ADDONS } from './lib/addons.js';
 
 const PORT = Number(process.env.PORT) || 4100;
 const PUB = path.resolve('public');
@@ -50,7 +51,7 @@ const publicAgent = a => { const { passwordHash, ...rest } = a; return { ...rest
 
 // ---------- read ----------
 app.get('/api/health', (req, res) => res.json(health()));
-app.get('/api/meta', (req, res) => res.json({ groups: GROUPS, modules: MODULES.map(({ kw, ...m }) => m), categories: CATEGORIES, priorities: PRIORITIES, statuses: STATUSES, resolutionCodes: RESOLUTION_CODES, sla: SLA_HOURS, samples: SAMPLES }));
+app.get('/api/meta', (req, res) => res.json({ groups: GROUPS, modules: MODULES.map(({ kw, ...m }) => m), categories: CATEGORIES, priorities: PRIORITIES, statuses: STATUSES, resolutionCodes: RESOLUTION_CODES, sla: SLA_HOURS, samples: SAMPLES, addons: ADDONS }));
 const publicSettings = () => { const { licenseKey, ...s } = store.settings(); return s; };
 app.get('/api/state', (req, res) => res.json({ me: publicUser(req.user), license: store.isAdmin(req.user.id) ? licenseStatus() : licenseBanner(), health: health(), settings: publicSettings(), tickets: store.tickets().map(({ uploadKey, ...t }) => t), emails: store.emails(), agents: store.publicAgents() }));
 app.get('/api/agents', (req, res) => res.json(store.publicAgents()));
@@ -102,7 +103,7 @@ app.post('/api/license', (req, res) => {
   if (v.payload.expires < Date.now()) return res.status(400).json({ error: `This key expired on ${new Date(v.payload.expires).toDateString()}. Ask for a new key.` });
   store.updateSettings({ licenseKey: v.key });
   const p = v.payload;
-  store.addAudit({ who: actorName(req), area: 'Settings', action: 'License key applied', target: p.customer, detail: `${p.type === 'demo' ? 'Demo' : 'Annual'} · ${p.maxUsers} users · valid until ${new Date(p.expires).toDateString()} · ${p.id}` });
+  store.addAudit({ who: actorName(req), area: 'Settings', action: 'License key applied', target: p.customer, detail: `${p.type === 'demo' ? 'Demo' : 'Annual'} · ${p.maxUsers} users · valid until ${new Date(p.expires).toDateString()}${(p.addons || []).length ? ' · add-ons: ' + p.addons.join(', ') : ''} · ${p.id}` });
   store.bus.emit('change', { type: 'settings' });
   res.json(licenseStatus());
 });

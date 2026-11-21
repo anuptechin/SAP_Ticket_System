@@ -543,3 +543,21 @@ a.att:hover{border-color:var(--g-b)}
 .licbar.bad{background:var(--bad-bg);color:var(--fg)}
 .licbar a{color:var(--g-b);font-weight:600}
 @media (max-width:860px){.lic{grid-template-columns:repeat(2,minmax(0,1fr))}.licbar{margin:12px 16px 0}}
+
+/* add-on modules */
+.addons{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+.addon{padding:18px 18px 16px;display:flex;flex-direction:column;gap:12px}
+.addon .ah{display:flex;gap:12px;align-items:flex-start}
+.addon .ah>div{flex:1;min-width:0}
+.addon h3{font-size:15px}
+.addon .ah p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+.addon .ai{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex:none;background:var(--grad);color:#fff}
+.addon .ai svg{width:19px;height:19px}
+.addon.locked .ai{background:var(--surface-3);color:var(--muted)}
+.addon .pill svg{vertical-align:-1px}
+.addon ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--fg-2)}
+.addon.locked ul{color:var(--muted)}
+.addon .af{margin-top:auto;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+.addon.addon-on{border-color:rgba(15,159,110,.35)}
+.licaddons{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:13px}
+.licaddons>span{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}

@@ -41,6 +41,8 @@ The desk needs a license key (**Settings → License**, admins only). Keys are s
 - **Users**: the number of active users allowed, admins included. Disabled users do not count.
 - Without a valid key only admins can sign in (to enter a key); incoming emails still become tickets. A banner warns 3 days (demo) or 30 days (annual) before expiry.
 
+**Add-on modules** are switched on by the key and shown to admins under *Add-on modules*: SLA Management (`sla`), Escalation Matrix (`escalation`), Analytics & Reports (`analytics`), Knowledge Base (`kb`), Change Request Workflow (`cr`), Customer Satisfaction (`csat`), Smart Auto-Assignment (`autoassign`), Teams & WhatsApp Alerts (`alerts`). Issue a key with `--addons sla,escalation` or `--addons all`. Add-ons are signed into the key, so they cannot be added by editing it. The modules themselves are delivered in later releases; until then a licensed add-on is shown as *Licensed* and an unlicensed one as *Locked*.
+
 Issuing keys (vendor machine only):
 
 ```powershell

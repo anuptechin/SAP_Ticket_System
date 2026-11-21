@@ -4,6 +4,7 @@
 //   npm run license -- keygen-recovery              create the recovery key      keys/license-recovery.pem  (move it OFF this computer)
 //   npm run license -- demo   --days 30 --users 10 --customer "Acme Ltd"
 //   npm run license -- annual           --users 50 --customer "Acme Ltd"           (365 days; --days for another length)
+//   npm run license -- annual ... --addons sla,escalation   include paid add-on modules (or --addons all)
 //   npm run license -- annual ... --use recovery    sign with the recovery key (automatic when the main key is missing)
 //   npm run license -- list                         every key issued from this computer (keys/issued-licenses.csv)
 //   npm run license -- inspect SDK1....             show what a key contains
@@ -12,6 +13,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { ADDON_IDS } from '../lib/addons.js';
 
 const KEY_DIR = path.resolve('keys');
 const FILES = { primary: path.join(KEY_DIR, 'license-private.pem'), recovery: path.join(KEY_DIR, 'license-recovery.pem') };
@@ -59,15 +61,20 @@ if (cmd === 'demo' || cmd === 'annual') {
   const users = Number(opt('users', cmd === 'demo' ? 5 : 25));
   const customer = String(opt('customer', 'Customer')).trim();
   if (!(days > 0 && days <= 3650) || !(users > 0 && users <= 10000)) { console.log('Use --days 1-3650 and --users 1-10000.'); process.exit(1); }
+  const addonArg = String(opt('addons', '')).trim();
+  const addons = addonArg === 'all' ? [...ADDON_IDS] : addonArg ? [...new Set(addonArg.split(',').map(x => x.trim()).filter(Boolean))] : [];
+  const unknown = addons.filter(a => !ADDON_IDS.includes(a));
+  if (unknown.length) { console.log(`Unknown add-on: ${unknown.join(', ')}. Available: ${ADDON_IDS.join(', ')} (or all)`); process.exit(1); }
   const issued = Date.now();
-  const payload = { id: 'LIC-' + crypto.randomBytes(4).toString('hex').toUpperCase(), customer, type: cmd, maxUsers: users, issued, expires: issued + days * 864e5 };
+  const payload = { id: 'LIC-' + crypto.randomBytes(4).toString('hex').toUpperCase(), customer, type: cmd, maxUsers: users, issued, expires: issued + days * 864e5, ...(addons.length ? { addons } : {}) };
   const head = 'SDK1.' + b64u(JSON.stringify(payload));
   const key = head + '.' + b64u(crypto.sign(null, Buffer.from(head), crypto.createPrivateKey(fs.readFileSync(FILES[use]))));
   // ledger: so a key can always be found and re-sent later
   const isNew = !fs.existsSync(LEDGER);
-  fs.appendFileSync(LEDGER, (isNew ? 'issued,id,customer,type,users,days,expires,signed_with,key\n' : '') +
-    [new Date(issued).toISOString(), payload.id, customer, cmd, users, days, new Date(payload.expires).toISOString().slice(0, 10), use, key].map(csv).join(',') + '\n');
-  console.log(`\n${cmd === 'demo' ? 'Demo' : 'Annual'} license for ${customer}: ${users} users, ${days} days, valid until ${new Date(payload.expires).toDateString()} (${payload.id}, signed with ${use} key)\n`);
+  fs.appendFileSync(LEDGER, (isNew ? 'issued,id,customer,type,users,days,expires,signed_with,key,addons\n' : '') +
+    [new Date(issued).toISOString(), payload.id, customer, cmd, users, days, new Date(payload.expires).toISOString().slice(0, 10), use, key, addons.join(' ')].map(csv).join(',') + '\n');
+  console.log(`\n${cmd === 'demo' ? 'Demo' : 'Annual'} license for ${customer}: ${users} users, ${days} days, valid until ${new Date(payload.expires).toDateString()} (${payload.id}, signed with ${use} key)`);
+  console.log(`Add-on modules: ${addons.length ? addons.join(', ') : 'none'}\n`);
   console.log(key + '\n');
   console.log(`Recorded in ${LEDGER}`);
   process.exit(0);
@@ -76,8 +83,8 @@ if (cmd === 'demo' || cmd === 'annual') {
 if (cmd === 'list') {
   if (!fs.existsSync(LEDGER)) { console.log('No keys issued from this computer yet.'); process.exit(0); }
   const rows = fs.readFileSync(LEDGER, 'utf8').trim().split('\n').slice(1).map(l => l.match(/("([^"]|"")*"|[^,]*)(,|$)/g).map(c => c.replace(/,$/, '').replace(/^"|"$/g, '').replace(/""/g, '"')));
-  console.log('\nissued       id            type    users  expires      signed with  customer');
-  for (const r of rows) console.log(`${r[0].slice(0, 10)}   ${r[1].padEnd(13)} ${r[3].padEnd(7)} ${String(r[4]).padStart(5)}  ${r[6]}   ${r[7].padEnd(11)}  ${r[2]}`);
+  console.log('\nissued       id            type    users  expires      signed with  customer  [add-ons]');
+  for (const r of rows) console.log(`${r[0].slice(0, 10)}   ${r[1].padEnd(13)} ${r[3].padEnd(7)} ${String(r[4]).padStart(5)}  ${r[6]}   ${r[7].padEnd(11)}  ${r[2]}${r[9] ? '  [' + r[9] + ']' : ''}`);
   console.log(`\n${rows.length} key(s). Full keys are in ${LEDGER}`);
   process.exit(0);
 }
@@ -89,4 +96,4 @@ if (cmd === 'inspect') {
   process.exit(0);
 }
 
-console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 12).map(l => l.replace(/^\/\/ ?/, '')).join('\n'));
+console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 13).map(l => l.replace(/^\/\/ ?/, '')).join('\n'));

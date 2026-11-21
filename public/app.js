@@ -24,6 +24,14 @@ const IC = {
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
   log: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  rep: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',
+  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
+  flow: '<circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7 6h10M6 8l5 8M18 8l-5 8"/>',
+  star: '<path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/>',
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  box: '<path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="M3.3 7L12 12l8.7-5M12 22V12"/>',
   clip: '<path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',
 };
 const ico = (k, a = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${a}>${IC[k]}</svg>`;
@@ -118,14 +126,14 @@ const VIEWS = {
   tickets: ['Tickets', 'tix', 'Structured tickets created from email conversations'],
   modules: ['SAP Module Map', 'map', 'How tickets are categorised across SAP modules and components'],
   lab: ['Parse test', 'lab', 'Check how an email would be categorised — nothing is saved'],
-  users: ['Users', 'users', 'Who can work on tickets and what they handle'], audit: ['Audit log', 'log', 'Who did what, and when — visible to admins only'],
+  users: ['Users', 'users', 'Who can work on tickets and what they handle'], audit: ['Audit log', 'log', 'Who did what, and when — visible to admins only'], addons: ['Add-on modules', 'box', 'Optional modules, switched on by your license'],
   setup: ['Settings', 'gear', 'Ticket parsing and mail settings'],
 };
 function renderNav() {
   const proc = S.emails.filter(e => e.status === 'processing').length;
   const clar = S.emails.filter(e => e.analysis?.decision === 'request_clarification').length;
   const cnt = { inbox: proc ? [proc, 'hot'] : clar ? [clar, ''] : null, tickets: [openTickets().length, ''] };
-  $('#nav').innerHTML = '<div class="nav-label">Workspace</div>' + Object.entries(VIEWS).filter(([k]) => !HIDDEN_VIEWS.includes(k) && (!['audit', 'setup'].includes(k) || meIsAdmin())).map(([k, [l, i]]) =>
+  $('#nav').innerHTML = '<div class="nav-label">Workspace</div>' + Object.entries(VIEWS).filter(([k]) => !HIDDEN_VIEWS.includes(k) && (!['audit', 'setup', 'addons'].includes(k) || meIsAdmin())).map(([k, [l, i]]) =>
     (k === 'users' ? '<div class="nav-label">Admin</div>' : '') + `<a href="#${k}" class="${UI.view === k ? 'on' : ''}" title="${l}">${ico(i)}<span class="nl">${l}</span>${cnt[k] && cnt[k][0] ? `<span class="cnt ${cnt[k][1]}">${cnt[k][0]}</span>` : ''}</a>`).join('');
   const h = S.health;
   $('#engineCard').innerHTML = `<div class="row"><span class="dot ${h.engine === 'claude' && h.imap?.status !== 'error' ? '' : 'off'}"></span>${h.imap?.enabled ? (h.imap.status === 'error' ? 'Mailbox not reachable' : 'Mailbox connected') : 'Mailbox not connected'}</div><b>${esc(h.mailbox || '')}</b><span style="color:var(--side-muted)">${(S.settings?.analysisMode || 'basic') === 'detailed' ? 'Detailed' : 'Basic'} parsing · ${h.engine === 'claude' ? 'automatic' : 'rules only'}</span>`;
@@ -138,7 +146,7 @@ function render() {
   // While someone is typing in the ticket filters, refresh only the results so the box keeps focus and text.
   const typingInTickets = UI.view === 'tickets' && $('#tQ') && $('.toolbar')?.contains(document.activeElement);
   if (typingInTickets) tBody();
-  else if (UI.view !== 'lab' || !$('#labForm')) { ({ dashboard: vDash, inbox: vInbox, tickets: vTickets, modules: vModules, lab: vLab, users: vUsers, audit: vAudit, setup: vSetup })[UI.view](); wireDrops(); }
+  else if (UI.view !== 'lab' || !$('#labForm')) { ({ dashboard: vDash, inbox: vInbox, tickets: vTickets, modules: vModules, lab: vLab, users: vUsers, audit: vAudit, addons: vAddons, setup: vSetup })[UI.view](); wireDrops(); }
   if (UI.openId && UI.editRecord !== UI.openId) drawTicket(); // don't wipe an edit in progress
 }
 function go() {
@@ -782,6 +790,7 @@ function licenseCard() {
         <div><span>Valid until</span><b>${new Date(L.expires).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</b><small>${L.state === 'valid' ? `${L.daysLeft} day${L.daysLeft === 1 ? '' : 's'} left` : ''}</small></div>
         <div><span>Users</span><b class="${L.overLimit ? 'over' : ''}">${L.activeUsers} of ${L.maxUsers}</b><em class="bar"><i style="width:${seats}%"></i></em><small>active users, admins included</small></div>
       </div>` : ''}
+      ${L.customer ? `<div class="licaddons"><span>Add-on modules</span><div>${addonChips()}</div></div>` : ''}
       ${L.state !== 'valid' && L.message ? `<div class="note warn">${esc(L.message)} ${L.state === 'none' || L.state === 'expired' ? 'Until a valid key is entered, only admins can sign in. Incoming emails are still turned into tickets.' : ''}</div>` : ''}
       ${L.overLimit ? `<div class="note warn">${L.activeUsers} users are active but the license allows ${L.maxUsers}. Disable users on the Users page, or apply a key with more users.</div>` : ''}
       <form id="licForm" style="display:flex;flex-direction:column;gap:10px">
@@ -811,6 +820,26 @@ function renderLicenseBanner() {
   if (L.state && L.state !== 'valid') msg = admin ? `${L.state === 'none' ? 'No license key has been entered' : L.state === 'expired' ? 'The license has expired' : 'The license key is not valid'}. Only admins can sign in until a key is applied in <a href="#setup">Settings → License</a>.` : '';
   else if (L.expiringSoon) msg = `The ${L.type === 'demo' ? 'demo' : 'annual'} license expires in <b>${L.daysLeft} day${L.daysLeft === 1 ? '' : 's'}</b>.${admin ? ' Apply a new key in <a href="#setup">Settings → License</a>.' : ' Please tell your admin.'}`;
   el.innerHTML = msg ? `<div class="licbar ${L.state === 'valid' ? 'soon' : 'bad'}">${msg}</div>` : '';
+}
+
+/* ---------- ADD-ON MODULES (admin) ---------- */
+const licensedAddons = () => (S.license?.state === 'valid' ? S.license.addons || [] : []);
+function vAddons() {
+  const on = licensedAddons();
+  const cat = META.addons || [];
+  $('#view').innerHTML = `
+  <div class="note">Add-on modules extend SensAI Desk. Each one is switched on by your license key. ${on.length ? `Your license includes <b>${on.length}</b> of ${cat.length}.` : 'Your current license includes none.'} To add a module, ask your SensAI Desk provider for a key that includes it, then apply it in <a href="#setup">Settings → License</a>.</div>
+  <div class="addons">${cat.map(a => { const lic = on.includes(a.id); return `
+    <article class="card addon ${lic ? 'addon-on' : 'locked'}">
+      <div class="ah"><span class="ai">${ico(IC[a.icon] ? a.icon : 'spark')}</span><div><h3>${esc(a.name)}</h3><p>${esc(a.tagline)}</p></div>
+        <span class="pill ${lic ? 'st-done' : 'st-new'}">${lic ? 'Licensed' : `${ico('lock', 'width="12" height="12"')} Locked`}</span></div>
+      <ul>${a.features.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
+      <div class="af">${lic ? 'Included in your license. This module is switched on as soon as it is released in an update.' : 'Available with an add-on license.'}</div>
+    </article>`; }).join('')}</div>`;
+}
+function addonChips() {
+  const on = licensedAddons(), cat = META.addons || [];
+  return on.length ? on.map(id => `<span class="pill st-done">${esc(cat.find(a => a.id === id)?.name || id)}</span>`).join(' ') : '<span class="muted small">None — see <a href="#addons">Add-on modules</a></span>';
 }
 
 /* ---------- MODALS ---------- */
@@ -875,7 +904,7 @@ function palette(initial = '') {
   const ACTIONS = [
     { l: 'Send a test email', act: 'compose', kw: 'send test email compose new simulate' },
     { l: 'Run all sample emails', act: 'runSamples', kw: 'run samples demo seed' },
-    ...Object.entries(VIEWS).filter(([k]) => !HIDDEN_VIEWS.includes(k) && (!['audit', 'setup'].includes(k) || meIsAdmin())).map(([k, [l]]) => ({ l: 'Go to ' + l, href: '#' + k, kw: 'go open view ' + l.toLowerCase() + ' ' + k })),
+    ...Object.entries(VIEWS).filter(([k]) => !HIDDEN_VIEWS.includes(k) && (!['audit', 'setup', 'addons'].includes(k) || meIsAdmin())).map(([k, [l]]) => ({ l: 'Go to ' + l, href: '#' + k, kw: 'go open view ' + l.toLowerCase() + ' ' + k })),
   ];
   const run = () => {
     const s = q.value.toLowerCase().trim();
