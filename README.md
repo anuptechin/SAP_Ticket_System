@@ -43,6 +43,11 @@ The desk needs a license key (**Settings → License**, admins only). Keys are s
 
 **Add-on modules** are switched on by the key and shown to admins under *Add-on modules*: SLA Management (`sla`), Escalation Matrix (`escalation`), Analytics & Reports (`analytics`), Knowledge Base (`kb`), Change Request Workflow (`cr`), Customer Satisfaction (`csat`), Smart Auto-Assignment (`autoassign`), Teams & WhatsApp Alerts (`alerts`). Issue a key with `--addons sla,escalation` or `--addons all`. Add-ons are signed into the key, so they cannot be added by editing it. The modules themselves are delivered in later releases; until then a licensed add-on is shown as *Licensed* and an unlicensed one as *Locked*.
 
+**Built add-ons** (each runs only when its key includes it; admins find them under *Admin*):
+
+- **SLA Management** (`sla`): response/resolution policies by priority, with overrides per SAP module or category; business hours, working days and holidays; the clock pauses while a ticket is *Awaiting Info*; the assignee is emailed at a warning threshold (default 75%) and at breach; compliance report by priority and module. Saving recalculates open tickets.
+- **Escalation Matrix** (`escalation`): rules by priority and SAP module with up to 4 levels, each firing at a share of the resolution time (100% = breach) and notifying the assignee, chosen users and extra emails. Escalations are automatic (checked every minute) or manual (*Escalate now* on the ticket), and are recorded on the ticket and in the audit log.
+
 Issuing keys (vendor machine only):
 
 ```powershell

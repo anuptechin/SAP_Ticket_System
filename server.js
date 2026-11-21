@@ -15,6 +15,9 @@ import { requireUser, login, logout, currentUser, authMode, publicUser, hashPass
 import { saveAttachments, sendAttachment } from './lib/attachments.js';
 import { verifyKey, licenseStatus, licenseBanner, seatsLeft } from './lib/license.js';
 import { ADDONS } from './lib/addons.js';
+import { addonEnabled } from './lib/license.js';
+import { slaConfig, validateSlaConfig, slaReport, applySla } from './lib/sla.js';
+import { escalationConfig, validateEscalationConfig, escalate, startWatcher, escalationLog, ruleFor } from './lib/escalation.js';
 
 const PORT = Number(process.env.PORT) || 4100;
 const PUB = path.resolve('public');
@@ -131,6 +134,50 @@ app.post('/api/settings/mail', (req, res) => {
 });
 app.post('/api/settings/mail/test', wrap(async (req, res) => { if (!adminOnly(req, res)) return; const { kind, values } = req.body || {}; res.json(kind === 'smtp' ? await testSmtp(values) : await testImap(values)); }));
 
+// ---------- add-on: SLA Management ----------
+const needAddon = (id, res) => { if (addonEnabled(id)) return true; res.status(403).json({ error: 'This add-on module is not included in your license.' }); return false; };
+const num = v => Number(v);
+app.get('/api/sla', (req, res) => { if (!needAddon('sla', res) || !adminOnly(req, res)) return; res.json({ config: slaConfig(), report: slaReport(Number(req.query.days) || 30) }); });
+app.put('/api/sla', (req, res) => {
+  if (!needAddon('sla', res) || !adminOnly(req, res)) return;
+  const b = req.body || {};
+  const c = {
+    policies: (b.policies || []).map((p, i) => ({ id: String(p.id || 'pol-' + Date.now() + i), priority: p.priority, module: p.module || 'Any', category: p.category || 'Any', responseHours: num(p.responseHours), resolutionHours: num(p.resolutionHours) })),
+    businessHours: { enabled: Boolean(b.businessHours?.enabled), days: (b.businessHours?.days || []).map(Number).filter(d => d >= 0 && d <= 6), start: String(b.businessHours?.start || ''), end: String(b.businessHours?.end || '') },
+    holidays: (b.holidays || []).map(h => ({ date: String(h.date || '').trim(), name: String(h.name || '').trim().slice(0, 80) })).filter(h => h.date),
+    pauseOnAwaitingInfo: Boolean(b.pauseOnAwaitingInfo), warnPercent: num(b.warnPercent),
+  };
+  const errs = validateSlaConfig(c); if (errs.length) return res.status(400).json({ error: errs.join('. ') });
+  store.setSetting('sla', c);
+  let n = 0; for (const t of store.tickets()) if (!['Resolved', 'Closed'].includes(t.status) && applySla(t)) n++;
+  store.save();
+  store.addAudit({ who: actorName(req), area: 'Settings', action: 'SLA policies saved', target: '', detail: `${c.policies.length} policies · business hours ${c.businessHours.enabled ? c.businessHours.start + '–' + c.businessHours.end : 'off'} · ${c.holidays.length} holidays · ${n} open tickets recalculated` });
+  store.bus.emit('change', { type: 'settings' }); res.json({ config: c, recalculated: n });
+});
+
+// ---------- add-on: Escalation Matrix ----------
+app.get('/api/escalation', (req, res) => { if (!needAddon('escalation', res) || !adminOnly(req, res)) return; res.json({ config: escalationConfig(), log: escalationLog() }); });
+app.put('/api/escalation', (req, res) => {
+  if (!needAddon('escalation', res) || !adminOnly(req, res)) return;
+  const c = { rules: (req.body?.rules || []).map((r, i) => ({ id: String(r.id || 'r-' + Date.now() + i), name: String(r.name || '').trim().slice(0, 60), priority: r.priority || 'Any', module: r.module || 'Any',
+    levels: (r.levels || []).map(l => ({ name: String(l.name || '').trim().slice(0, 40), percent: num(l.percent), notify: (l.notify || []).map(String), emails: (l.emails || []).map(e => String(e).trim().toLowerCase()).filter(Boolean) })) })) };
+  const errs = validateEscalationConfig(c); if (errs.length) return res.status(400).json({ error: errs.join('. ') });
+  store.setSetting('escalation', c);
+  store.addAudit({ who: actorName(req), area: 'Settings', action: 'Escalation matrix saved', target: '', detail: c.rules.map(r => `${r.name} (${r.levels.length} levels)`).join(' · ') });
+  store.bus.emit('change', { type: 'settings' }); res.json({ config: c });
+});
+app.post('/api/tickets/:id/escalate', wrap(async (req, res) => {
+  if (!needAddon('escalation', res)) return;
+  const t = store.ticket(req.params.id); if (!t) return res.status(404).json({ error: 'Ticket not found' });
+  if (['Resolved', 'Closed'].includes(t.status)) return res.status(400).json({ error: 'Resolved and closed tickets cannot be escalated.' });
+  const rule = ruleFor(t); if (!rule) return res.status(400).json({ error: `No escalation rule covers ${t.priority} · ${t.module}. Add one in Escalation Matrix.` });
+  const next = t.escalationLevel || 0;
+  if (next >= rule.levels.length) return res.status(400).json({ error: 'This ticket is already at the highest escalation level.' });
+  const reason = String(req.body?.reason || '').trim().slice(0, 200);
+  const e = await escalate(t, next, `Escalated manually by ${req.user.name}${reason ? ': ' + reason : ''}`, req.user.name);
+  res.json(e);
+}));
+
 // ---------- audit (admin) ----------
 app.get('/api/audit', (req, res) => {
   if (!store.isAdmin(req.user.id)) return res.status(403).json({ error: 'The audit log is visible to admins only.' });
@@ -225,6 +272,7 @@ app.listen(PORT, () => {
   const ic = imapConfig();
   const mode = startInbound();
   const inbound = mode === 'off' ? 'off' : mode === 'graph' ? `Microsoft 365 → ${MAILBOX}` : ic.host && ic.user ? `IMAP ${ic.user} @ ${ic.host} every ${Math.round(ic.everyMs / 1000)}s (new mail only)` : 'off (no IMAP settings)';
+  startWatcher(); // SLA warnings + automatic escalation (only act when those add-ons are licensed)
   console.log(`  Mailbox: ${MAILBOX}`);
   console.log(`  Inbound mail: ${inbound}   SMTP replies: ${smtpInfo() ? smtpInfo().host : 'off'}\n`);
 });

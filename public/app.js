@@ -32,6 +32,7 @@ const IC = {
   bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
   lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   box: '<path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z"/><path d="M3.3 7L12 12l8.7-5M12 22V12"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
   clip: '<path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',
 };
 const ico = (k, a = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${a}>${IC[k]}</svg>`;
@@ -51,7 +52,7 @@ async function api(method, url, body, raw) {
   if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
   return data;
 }
-async function refresh() { S = await api('GET', '/api/state'); UI.me = S.me?.id; if (UI.view === 'audit') { if ($('.toolbar')?.contains(document.activeElement)) { renderNav(); return; } AUDIT = null; } if (UI.view === 'setup' && !$('.settings :focus')) MAILCFG = null; if (UI.view === 'setup' && $('.settings :focus')) { renderNav(); return; } render(); }
+async function refresh() { S = await api('GET', '/api/state'); UI.me = S.me?.id; if (['sla', 'escalation'].includes(UI.view)) { renderNav(); renderLicenseBanner(); if (UI.openId) drawTicket(); return; } if (UI.view === 'audit') { if ($('.toolbar')?.contains(document.activeElement)) { renderNav(); return; } AUDIT = null; } if (UI.view === 'setup' && !$('.settings :focus')) MAILCFG = null; if (UI.view === 'setup' && $('.settings :focus')) { renderNav(); return; } render(); }
 
 /* ---------- helpers ---------- */
 function toast(msg, bad) { const el = document.createElement('div'); el.className = 'toast' + (bad ? ' bad' : ''); el.innerHTML = '<i></i>' + esc(msg); $('#toasts').appendChild(el); setTimeout(() => el.remove(), 4200); }
@@ -126,14 +127,14 @@ const VIEWS = {
   tickets: ['Tickets', 'tix', 'Structured tickets created from email conversations'],
   modules: ['SAP Module Map', 'map', 'How tickets are categorised across SAP modules and components'],
   lab: ['Parse test', 'lab', 'Check how an email would be categorised — nothing is saved'],
-  users: ['Users', 'users', 'Who can work on tickets and what they handle'], audit: ['Audit log', 'log', 'Who did what, and when — visible to admins only'], addons: ['Add-on modules', 'box', 'Optional modules, switched on by your license'],
+  users: ['Users', 'users', 'Who can work on tickets and what they handle'], audit: ['Audit log', 'log', 'Who did what, and when — visible to admins only'], sla: ['SLA Management', 'clock', 'Policies, business hours and compliance'], escalation: ['Escalation Matrix', 'up', 'Who is alerted, and when'], addons: ['Add-on modules', 'box', 'Optional modules, switched on by your license'],
   setup: ['Settings', 'gear', 'Ticket parsing and mail settings'],
 };
 function renderNav() {
   const proc = S.emails.filter(e => e.status === 'processing').length;
   const clar = S.emails.filter(e => e.analysis?.decision === 'request_clarification').length;
   const cnt = { inbox: proc ? [proc, 'hot'] : clar ? [clar, ''] : null, tickets: [openTickets().length, ''] };
-  $('#nav').innerHTML = '<div class="nav-label">Workspace</div>' + Object.entries(VIEWS).filter(([k]) => !HIDDEN_VIEWS.includes(k) && (!['audit', 'setup', 'addons'].includes(k) || meIsAdmin())).map(([k, [l, i]]) =>
+  $('#nav').innerHTML = '<div class="nav-label">Workspace</div>' + Object.entries(VIEWS).filter(([k]) => !HIDDEN_VIEWS.includes(k) && (!['audit', 'setup', 'addons'].includes(k) || meIsAdmin()) && (!['sla', 'escalation'].includes(k) || (meIsAdmin() && licensedAddons().includes(k)))).map(([k, [l, i]]) =>
     (k === 'users' ? '<div class="nav-label">Admin</div>' : '') + `<a href="#${k}" class="${UI.view === k ? 'on' : ''}" title="${l}">${ico(i)}<span class="nl">${l}</span>${cnt[k] && cnt[k][0] ? `<span class="cnt ${cnt[k][1]}">${cnt[k][0]}</span>` : ''}</a>`).join('');
   const h = S.health;
   $('#engineCard').innerHTML = `<div class="row"><span class="dot ${h.engine === 'claude' && h.imap?.status !== 'error' ? '' : 'off'}"></span>${h.imap?.enabled ? (h.imap.status === 'error' ? 'Mailbox not reachable' : 'Mailbox connected') : 'Mailbox not connected'}</div><b>${esc(h.mailbox || '')}</b><span style="color:var(--side-muted)">${(S.settings?.analysisMode || 'basic') === 'detailed' ? 'Detailed' : 'Basic'} parsing · ${h.engine === 'claude' ? 'automatic' : 'rules only'}</span>`;
@@ -146,12 +147,13 @@ function render() {
   // While someone is typing in the ticket filters, refresh only the results so the box keeps focus and text.
   const typingInTickets = UI.view === 'tickets' && $('#tQ') && $('.toolbar')?.contains(document.activeElement);
   if (typingInTickets) tBody();
-  else if (UI.view !== 'lab' || !$('#labForm')) { ({ dashboard: vDash, inbox: vInbox, tickets: vTickets, modules: vModules, lab: vLab, users: vUsers, audit: vAudit, addons: vAddons, setup: vSetup })[UI.view](); wireDrops(); }
+  else if (UI.view !== 'lab' || !$('#labForm')) { ({ dashboard: vDash, inbox: vInbox, tickets: vTickets, modules: vModules, lab: vLab, users: vUsers, audit: vAudit, addons: vAddons, sla: vSla, escalation: vEscalation, setup: vSetup })[UI.view](); wireDrops(); }
   if (UI.openId && UI.editRecord !== UI.openId) drawTicket(); // don't wipe an edit in progress
 }
 function go() {
   const h = decodeURIComponent(location.hash.slice(1));
   if (h.startsWith('ticket-')) { UI.openId = h.slice(7); if (!VIEWS[UI.view]) UI.view = 'tickets'; render(); return; }
+  SLA = null; ESC = null;
   UI.view = VIEWS[h] ? h : 'dashboard'; UI.openId = null; $('#drawerHost').innerHTML = ''; render();
 }
 
@@ -571,6 +573,7 @@ function drawTicket() {
       </div>
       <div class="colR">
         ${slaCard(t)}
+        ${escalationPanel(t)}
         ${requesterCard(t)}
         <div class="card"><div class="card-h"><h3>Classification</h3></div><div class="card-b"><div class="kv">
           <span>Category</span><select class="in" data-field="category">${['Incident', 'Change Request', 'Service Request', 'Query'].map(c => `<option ${c === t.category ? 'selected' : ''}>${c}</option>`).join('')}</select>
@@ -667,7 +670,7 @@ function slaCard(t) {
     : t.responseDueAt ? (now > t.responseDueAt ? `<span class="sla sla-breached">Response overdue ${dur(now - t.responseDueAt)}</span>` : `<span class="sla sla-ok">Respond within ${dur(t.responseDueAt - now)}</span>`) : '<span class="muted">—</span>';
   return `<div class="card"><div class="card-h"><h3>Service level</h3><span class="muted" style="font-size:12px">${t.priority} · ${PL[t.priority]}</span></div><div class="card-b"><div class="kv">
     <span>First response</span><div>${resp}${t.responseDueAt ? `<div class="muted" style="font-size:11.5px">due ${fmt(t.responseDueAt)}</div>` : ''}</div>
-    <span>Resolution</span><div>${slaChip(t)}<div class="muted" style="font-size:11.5px">${META.sla[t.priority]}h target · due ${fmt(t.slaDueAt)}</div></div>
+    <span>Resolution</span><div>${slaChip(t)}<div class="muted" style="font-size:11.5px">${t.slaPolicy && licensedAddons().includes('sla') ? 'Policy ' + esc(t.slaPolicy) : META.sla[t.priority] + 'h target'} · due ${fmt(t.slaDueAt)}${t.slaPausedAt && licensedAddons().includes('sla') ? ' · <b>paused</b> while awaiting info' : ''}</div></div>
   </div></div></div>`;
 }
 
@@ -834,12 +837,140 @@ function vAddons() {
       <div class="ah"><span class="ai">${ico(IC[a.icon] ? a.icon : 'spark')}</span><div><h3>${esc(a.name)}</h3><p>${esc(a.tagline)}</p></div>
         <span class="pill ${lic ? 'st-done' : 'st-new'}">${lic ? 'Licensed' : `${ico('lock', 'width="12" height="12"')} Locked`}</span></div>
       <ul>${a.features.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
-      <div class="af">${lic ? 'Included in your license. This module is switched on as soon as it is released in an update.' : 'Available with an add-on license.'}</div>
+      <div class="af">${lic ? (['sla', 'escalation'].includes(a.id) ? `Included in your license. <a class="btn btn-sm" href="#${a.id}" style="margin-left:6px">Open</a>` : 'Included in your license. This module is switched on as soon as it is released in an update.') : 'Available with an add-on license.'}</div>
     </article>`; }).join('')}</div>`;
 }
 function addonChips() {
   const on = licensedAddons(), cat = META.addons || [];
   return on.length ? on.map(id => `<span class="pill st-done">${esc(cat.find(a => a.id === id)?.name || id)}</span>`).join(' ') : '<span class="muted small">None — see <a href="#addons">Add-on modules</a></span>';
+}
+
+/* ---------- ADD-ON: SLA MANAGEMENT ---------- */
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+let SLA = null; // { config, report } — config is edited in place until Save
+async function vSla() {
+  const el = $('#view');
+  if (!licensedAddons().includes('sla')) { el.innerHTML = lockedPage('sla'); return; }
+  if (!SLA) { el.innerHTML = '<div class="card"><div class="card-b"><div class="shimmer" style="height:200px"></div></div></div>'; try { SLA = await api('GET', '/api/sla'); } catch (err) { el.innerHTML = `<div class="note bad">${esc(err.message)}</div>`; return; } if (UI.view !== 'sla') return; }
+  const c = SLA.config, r = SLA.report;
+  const modOpts = v => `<option ${v === 'Any' ? 'selected' : ''}>Any</option>` + META.modules.map(m => `<option value="${m.code}" ${m.code === v ? 'selected' : ''}>${m.code}</option>`).join('');
+  const catOpts = v => ['Any', 'Incident', 'Change Request', 'Service Request', 'Query'].map(x => `<option ${x === v ? 'selected' : ''}>${x}</option>`).join('');
+  const isDefault = p => p.module === 'Any' && p.category === 'Any';
+  const pol = c.policies.slice().sort((a, b) => a.priority.localeCompare(b.priority) || (isDefault(b) - isDefault(a)));
+  el.innerHTML = `<div class="settings" style="max-width:1100px">
+  <div class="grid g-kpi" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+    <div class="card kpi k2"><div class="eyebrow">SLA met · ${r.days} days</div><div class="v">${r.pct == null ? '—' : r.pct + '%'}</div><div class="s">${r.met} of ${r.resolved} resolved tickets</div></div>
+    <div class="card kpi k3"><div class="eyebrow">At risk now</div><div class="v">${r.atRisk.length}</div><div class="s">over ${c.warnPercent}% of time used</div></div>
+    <div class="card kpi" style="--x:1"><div class="eyebrow">Breached now</div><div class="v" style="color:var(--bad)">${r.breached.length}</div><div class="s">open and past due</div></div>
+    <div class="card kpi k4"><div class="eyebrow">Paused</div><div class="v">${r.paused}</div><div class="s">waiting on the requester</div></div>
+  </div>
+
+  <section class="card set"><div class="set-h"><div><h3>Policies</h3><p>Response and resolution targets. A policy for a specific SAP module or category overrides the priority default.</p></div><button class="btn btn-sm" data-act="slaAddPolicy">${ico('plus')}Add override</button></div>
+    <div class="set-b"><div class="tblw"><table class="tbl" style="min-width:720px"><thead><tr><th>Priority</th><th>SAP module</th><th>Category</th><th>Respond within (h)</th><th>Resolve within (h)</th><th></th></tr></thead><tbody>
+    ${pol.map(p => { const i = c.policies.indexOf(p), d = isDefault(p); return `<tr style="cursor:default"><td>${d ? prioPill(p.priority) + ' <span class="muted small">default</span>' : `<select class="in" data-slap="${i}" data-k="priority">${['P1', 'P2', 'P3', 'P4'].map(x => `<option ${x === p.priority ? 'selected' : ''}>${x}</option>`).join('')}</select>`}</td>
+      <td>${d ? '<span class="muted">All</span>' : `<select class="in" data-slap="${i}" data-k="module">${modOpts(p.module)}</select>`}</td>
+      <td>${d ? '<span class="muted">All</span>' : `<select class="in" data-slap="${i}" data-k="category">${catOpts(p.category)}</select>`}</td>
+      <td><input class="in num" type="number" min="0.25" step="0.25" data-slap="${i}" data-k="responseHours" value="${p.responseHours}" style="max-width:110px"></td>
+      <td><input class="in num" type="number" min="0.5" step="0.5" data-slap="${i}" data-k="resolutionHours" value="${p.resolutionHours}" style="max-width:110px"></td>
+      <td style="text-align:right">${d ? '' : `<button class="btn btn-sm btn-ghost" data-sladel="${i}" aria-label="Remove">${ico('x')}</button>`}</td></tr>`; }).join('')}
+    </tbody></table></div></div></section>
+
+  <section class="card set"><div class="set-h"><div><h3>Business hours</h3><p>When on, SLA clocks only run during working hours and skip holidays.</p></div></div>
+    <div class="set-b">
+      <label class="switch"><input type="checkbox" id="slaBhOn" ${c.businessHours.enabled ? 'checked' : ''}><span></span>Count only working hours</label>
+      <div class="bh ${c.businessHours.enabled ? '' : 'dim'}">
+        <div class="chips">${DAYS.map((d, i) => `<label class="mp"><input type="checkbox" data-sladay="${i}" ${c.businessHours.days.includes(i) ? 'checked' : ''}><span>${d}</span></label>`).join('')}</div>
+        <div class="fgrid" style="max-width:360px"><label class="f">From<input class="in" type="time" id="slaStart" value="${esc(c.businessHours.start)}"></label><label class="f">To<input class="in" type="time" id="slaEnd" value="${esc(c.businessHours.end)}"></label></div>
+      </div>
+      <div><div class="eyebrow" style="margin-bottom:8px">Holidays</div>
+        <div class="chips" style="margin-bottom:10px">${c.holidays.length ? c.holidays.slice().sort((a, b) => a.date.localeCompare(b.date)).map(h => `<span class="tag">${esc(h.date)}${h.name ? ' · ' + esc(h.name) : ''}<button type="button" data-slahol="${esc(h.date)}" aria-label="Remove">×</button></span>`).join('') : '<span class="muted small">No holidays added</span>'}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><input class="in" type="date" id="slaHolDate" style="max-width:180px"><input class="in" id="slaHolName" placeholder="Name, e.g. Diwali" style="max-width:220px"><button type="button" class="btn btn-sm" data-act="slaAddHoliday">Add holiday</button></div></div>
+    </div></section>
+
+  <section class="card set"><div class="set-h"><div><h3>Clock rules</h3></div></div>
+    <div class="set-b">
+      <label class="switch"><input type="checkbox" id="slaPause" ${c.pauseOnAwaitingInfo ? 'checked' : ''}><span></span>Pause the SLA clock while a ticket is Awaiting Info</label>
+      <label class="f" style="max-width:340px">Warn the assignee when this much of the resolution time is used<select class="in" id="slaWarn">${[50, 60, 70, 75, 80, 90].map(p => `<option value="${p}" ${p === c.warnPercent ? 'selected' : ''}>${p}%</option>`).join('')}</select></label>
+      <div id="slaMsg"></div>
+      <div class="set-f"><span class="muted small" style="margin-right:auto">Saving recalculates the deadlines of all open tickets.</span><button class="btn btn-grad" data-act="slaSave">Save SLA settings</button></div>
+    </div></section>
+
+  <section class="card set"><div class="set-h"><div><h3>Compliance · last ${r.days} days</h3><p>Share of resolved tickets closed within their resolution SLA.</p></div></div>
+    <div class="set-b"><div class="grid g-2e">
+      <div><div class="eyebrow" style="margin-bottom:8px">By priority</div>${slaBars(r.byPriority)}</div>
+      <div><div class="eyebrow" style="margin-bottom:8px">By SAP module</div>${slaBars(r.byModule)}</div>
+    </div>
+    ${r.breached.length || r.atRisk.length ? `<div class="eyebrow" style="margin-top:8px">Needs attention</div><div class="alist">${[...r.breached.map(x => ({ ...x, tag: 'Breached' })), ...r.atRisk.map(x => ({ ...x, tag: x.used + '% used' }))].map(x => `<div class="fitem" data-open="${esc(x.id)}">${prioPill(x.priority)}<div style="min-width:0"><div class="tt">${esc(x.title)}</div><div class="mt"><span class="idl">${esc(x.id)}</span><span>${esc(x.assignee || 'Unassigned')}</span><span>due ${fmt(x.due)}</span></div></div><span class="pill ${x.tag === 'Breached' ? 'st-wait' : 'st-new'}">${esc(x.tag)}</span></div>`).join('')}</div>` : ''}
+    </div></section>
+  </div>`;
+}
+function slaBars(rows) {
+  if (!rows.length) return '<div class="muted small">No resolved tickets in this period.</div>';
+  return `<div class="hbars">${rows.map(x => `<div class="hbar" style="grid-template-columns:76px minmax(0,1fr) 70px"><span class="l">${esc(x.key)}</span><span class="tr"><i style="width:${x.pct}%;background:${x.pct >= 90 ? 'var(--grad-mint)' : x.pct >= 70 ? 'var(--grad-warm)' : 'var(--bad)'}"></i></span><span class="c">${x.pct}% <span class="muted" style="font-weight:500">(${x.met}/${x.resolved})</span></span></div>`).join('')}</div>`;
+}
+function slaReadForm() {
+  const c = SLA.config;
+  $$('[data-slap]').forEach(el => { const p = c.policies[+el.dataset.slap]; if (!p) return; const k = el.dataset.k; p[k] = ['responseHours', 'resolutionHours'].includes(k) ? Number(el.value) : el.value; });
+  c.businessHours.enabled = $('#slaBhOn').checked;
+  c.businessHours.days = $$('[data-sladay]').filter(i => i.checked).map(i => +i.dataset.sladay);
+  c.businessHours.start = $('#slaStart').value; c.businessHours.end = $('#slaEnd').value;
+  c.pauseOnAwaitingInfo = $('#slaPause').checked; c.warnPercent = Number($('#slaWarn').value);
+}
+
+/* ---------- ADD-ON: ESCALATION MATRIX ---------- */
+let ESC = null;
+async function vEscalation() {
+  const el = $('#view');
+  if (!licensedAddons().includes('escalation')) { el.innerHTML = lockedPage('escalation'); return; }
+  if (!ESC) { el.innerHTML = '<div class="card"><div class="card-b"><div class="shimmer" style="height:200px"></div></div></div>'; try { ESC = await api('GET', '/api/escalation'); } catch (err) { el.innerHTML = `<div class="note bad">${esc(err.message)}</div>`; return; } if (UI.view !== 'escalation') return; }
+  const c = ESC.config;
+  const users = (S.agents || []).filter(a => a.active !== false);
+  const who = n => n === 'assignee' ? 'Assignee' : (users.find(a => a.id === n)?.name || n);
+  const modOpts = v => `<option ${v === 'Any' ? 'selected' : ''}>Any</option>` + META.modules.map(m => `<option value="${m.code}" ${m.code === v ? 'selected' : ''}>${m.code}</option>`).join('');
+  el.innerHTML = `<div class="settings" style="max-width:1100px">
+  <div class="note">When a ticket has used the set share of its resolution time, everyone in that level is emailed with the ticket details and a link. <b>100% = SLA breached</b>; 150% = half the time again past the deadline. The most specific rule wins (module before "Any"). Agents can also escalate a ticket by hand.</div>
+  ${c.rules.map((r, ri) => `<section class="card set rule-card">
+    <div class="set-h" style="align-items:center"><div style="flex:1;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <input class="in" data-escr="${ri}" data-k="name" value="${esc(r.name)}" style="max-width:240px;font-weight:600" aria-label="Rule name">
+      <label class="inl">Priority <select class="in" data-escr="${ri}" data-k="priority">${['Any', 'P1', 'P2', 'P3', 'P4'].map(x => `<option ${x === r.priority ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+      <label class="inl">SAP module <select class="in" data-escr="${ri}" data-k="module">${modOpts(r.module)}</select></label></div>
+      <button class="btn btn-sm btn-ghost btn-danger" data-escdelrule="${ri}">Delete rule</button></div>
+    <div class="set-b"><div class="levels">
+      ${r.levels.map((l, li) => `<div class="level">
+        <div class="lv-h"><span class="lv-n">L${li + 1}</span><input class="in" data-escl="${ri}:${li}" data-k="name" value="${esc(l.name)}" aria-label="Level name">
+          <label class="inl">at <select class="in" data-escl="${ri}:${li}" data-k="percent">${[25, 50, 75, 90, 100, 125, 150, 200, 300].map(p => `<option value="${p}" ${p === l.percent ? 'selected' : ''}>${p}%${p === 100 ? ' (breach)' : ''}</option>`).join('')}</select></label>
+          ${r.levels.length > 1 ? `<button class="btn btn-sm btn-ghost" data-escdellvl="${ri}:${li}" aria-label="Remove level">${ico('x')}</button>` : ''}</div>
+        <div class="chips">${['assignee', ...users.map(a => a.id)].map(n => `<label class="mp"><input type="checkbox" data-escn="${ri}:${li}" value="${n}" ${l.notify.includes(n) ? 'checked' : ''}><span>${esc(who(n))}</span></label>`).join('')}</div>
+        <input class="in" data-escl="${ri}:${li}" data-k="emails" value="${esc(l.emails.join(', '))}" placeholder="Extra emails (comma separated), e.g. it.head@company.com">
+      </div>`).join('')}
+      ${r.levels.length < 4 ? `<button class="btn btn-sm" data-escaddlvl="${ri}">${ico('plus')}Add level</button>` : ''}
+    </div></div></section>`).join('')}
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="escAddRule">${ico('plus')}Add rule</button><span class="sp" style="flex:1"></span><span id="escMsg" style="flex-basis:100%"></span><button class="btn btn-grad" data-act="escSave">Save escalation matrix</button></div>
+
+  <section class="card set"><div class="set-h"><div><h3>Recent escalations</h3></div></div><div class="set-b">
+    ${ESC.log.length ? `<div class="alist">${ESC.log.slice(0, 30).map(e => `<div class="fitem" data-open="${esc(e.id)}">${prioPill(e.priority)}<div style="min-width:0"><div class="tt">${esc(e.title)}</div><div class="mt"><span class="idl">${esc(e.id)}</span><span>${esc(e.name)} · ${esc(e.rule)}</span><span>${esc(e.reason || '')}</span><span>${fmt(e.at)}</span></div></div><span class="pill st-wait">L${e.level}</span></div>`).join('')}</div>` : '<div class="muted small">No escalations yet.</div>'}
+  </div></section></div>`;
+}
+function escReadForm() {
+  const c = ESC.config;
+  $$('[data-escr]').forEach(el => { c.rules[+el.dataset.escr][el.dataset.k] = el.value; });
+  $$('[data-escl]').forEach(el => { const [ri, li] = el.dataset.escl.split(':').map(Number); const l = c.rules[ri]?.levels[li]; if (!l) return; const k = el.dataset.k; l[k] = k === 'percent' ? Number(el.value) : k === 'emails' ? el.value.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean) : el.value; });
+  c.rules.forEach((r, ri) => r.levels.forEach((l, li) => { l.notify = $$(`[data-escn="${ri}:${li}"]`).filter(i => i.checked).map(i => i.value); }));
+}
+
+/* ---------- shared: locked page + ticket panels ---------- */
+function lockedPage(id) {
+  const a = (META.addons || []).find(x => x.id === id) || { name: id, features: [] };
+  return `<div class="card"><div class="empty" style="padding:60px 20px">${ico('lock', 'width="28" height="28"')}<b style="margin-top:10px">${esc(a.name)} is not included in your license</b>${esc(a.tagline || '')}<br><a class="btn" href="#addons" style="margin-top:16px;display:inline-flex">See add-on modules</a></div></div>`;
+}
+function escalationPanel(t) {
+  if (!licensedAddons().includes('escalation')) return '';
+  const list = t.escalations || [], open = !DONE.includes(t.status);
+  if (!list.length && !open) return '';
+  return `<div class="card"><div class="card-h"><h3>Escalation</h3>${t.escalationLevel ? `<span class="pill st-wait">Level ${t.escalationLevel}</span>` : '<span class="muted small">Not escalated</span>'}</div><div class="card-b" style="display:flex;flex-direction:column;gap:10px">
+    ${list.length ? `<div class="act">${list.slice().reverse().map(e => `<div><span></span><span><b>${esc(e.name)}</b> · ${esc(e.reason || '')}<br><span class="tm">${fmt(e.at)} · notified ${esc((e.to || []).join(', ') || 'nobody')}</span></span></div>`).join('')}</div>` : ''}
+    ${open ? `<button class="btn btn-sm" data-act="escalateNow">${ico('up')}Escalate now</button>` : ''}
+  </div></div>`;
 }
 
 /* ---------- MODALS ---------- */
@@ -904,7 +1035,7 @@ function palette(initial = '') {
   const ACTIONS = [
     { l: 'Send a test email', act: 'compose', kw: 'send test email compose new simulate' },
     { l: 'Run all sample emails', act: 'runSamples', kw: 'run samples demo seed' },
-    ...Object.entries(VIEWS).filter(([k]) => !HIDDEN_VIEWS.includes(k) && (!['audit', 'setup', 'addons'].includes(k) || meIsAdmin())).map(([k, [l]]) => ({ l: 'Go to ' + l, href: '#' + k, kw: 'go open view ' + l.toLowerCase() + ' ' + k })),
+    ...Object.entries(VIEWS).filter(([k]) => !HIDDEN_VIEWS.includes(k) && (!['audit', 'setup', 'addons'].includes(k) || meIsAdmin()) && (!['sla', 'escalation'].includes(k) || (meIsAdmin() && licensedAddons().includes(k)))).map(([k, [l]]) => ({ l: 'Go to ' + l, href: '#' + k, kw: 'go open view ' + l.toLowerCase() + ' ' + k })),
   ];
   const run = () => {
     const s = q.value.toLowerCase().trim();
@@ -950,7 +1081,7 @@ function bindDrop(zoneSel, inputSel, onFiles) {
 
 /* ---------- events ---------- */
 document.addEventListener('click', async ev => {
-  const el = ev.target.closest('[data-act],[data-open],[data-mail],[data-if],[data-sel],[data-tg],[data-ts],[data-mode],[data-tsort],[data-fmod],[data-status],[data-cmp],[data-csample],[data-lsample],[data-reprocess],[data-copy],[data-fagent],[data-go],[data-setmode],[data-mailtest],[data-edituser],[data-toggleuser],[data-confirmdeact],[data-aarea],[data-lightbox],[data-setauth]');
+  const el = ev.target.closest('[data-act],[data-open],[data-mail],[data-if],[data-sel],[data-tg],[data-ts],[data-mode],[data-tsort],[data-fmod],[data-status],[data-cmp],[data-csample],[data-lsample],[data-reprocess],[data-copy],[data-fagent],[data-go],[data-setmode],[data-mailtest],[data-edituser],[data-toggleuser],[data-confirmdeact],[data-aarea],[data-lightbox],[data-setauth],[data-sladel],[data-slahol],[data-escdelrule],[data-escaddlvl],[data-escdellvl]');
   if (!el) return; const d = el.dataset;
   if (d.open) { closeModal(); openTicket(d.open); return; }
   if (d.mail) { closeModal(); UI.iSel = d.mail; UI.iFilter = 'all'; if (UI.openId) closeDrawer(); if (UI.view !== 'inbox') location.hash = 'inbox'; else render(); return; }
@@ -960,6 +1091,11 @@ document.addEventListener('click', async ev => {
   if (d.ts) { UI.tStatus = d.ts; vTickets(); return; }
   if (d.mode) { UI.tMode = d.mode; saveUI(); vTickets(); return; }
   if (d.tsort) { const s = UI.tSort; UI.tSort = s.key === d.tsort ? { key: s.key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key: d.tsort, dir: FIRST_DIR[d.tsort] || 'asc' }; saveUI(); tBody(); return; }
+  if (d.sladel) { slaReadForm(); SLA.config.policies.splice(+d.sladel, 1); vSla(); return; }
+  if (d.slahol) { slaReadForm(); SLA.config.holidays = SLA.config.holidays.filter(h => h.date !== d.slahol); vSla(); return; }
+  if (d.escdelrule) { escReadForm(); ESC.config.rules.splice(+d.escdelrule, 1); vEscalation(); return; }
+  if (d.escaddlvl) { escReadForm(); const r = ESC.config.rules[+d.escaddlvl]; const opts = [25, 50, 75, 90, 100, 125, 150, 200, 300]; const last = r.levels[r.levels.length - 1]?.percent || 0; r.levels.push({ name: 'Level ' + (r.levels.length + 1), percent: opts.find(p => p > last) || 300, notify: [], emails: [] }); vEscalation(); return; }
+  if (d.escdellvl) { escReadForm(); const [ri, li] = d.escdellvl.split(':').map(Number); ESC.config.rules[ri].levels.splice(li, 1); vEscalation(); return; }
   if (d.setauth) { try { S.settings = await api('POST', '/api/settings', { authMode: d.setauth }); toast(d.setauth === 'password' ? 'Passwords are now required to sign in' : 'Passwordless sign-in is on'); render(); } catch (err) { toast(err.message, true); } return; }
   if (d.lightbox) { lightbox(d.lightbox, d.name); return; }
   if (d.aarea) { UI.audit.area = d.aarea; vAudit(); return; }
@@ -983,6 +1119,12 @@ document.addEventListener('click', async ev => {
     case 'compose': compose(); break;
     case 'palette': palette(); break;
     case 'runSamples': closeModal(); runSamples(); break;
+    case 'slaAddPolicy': slaReadForm(); SLA.config.policies.push({ id: 'pol-' + Date.now(), priority: 'P1', module: META.modules[0].code, category: 'Any', responseHours: 1, resolutionHours: 4 }); vSla(); break;
+    case 'slaAddHoliday': { slaReadForm(); const date = $('#slaHolDate').value, name = $('#slaHolName').value.trim(); if (!date) { toast('Pick a date first', true); break; } SLA.config.holidays = [...SLA.config.holidays.filter(h => h.date !== date), { date, name }]; vSla(); break; }
+    case 'slaSave': { slaReadForm(); el.disabled = true; try { const r = await api('PUT', '/api/sla', SLA.config); SLA = await api('GET', '/api/sla'); toast(`SLA settings saved · ${r.recalculated} open ticket${r.recalculated === 1 ? '' : 's'} recalculated`); vSla(); } catch (err) { $('#slaMsg').innerHTML = `<div class="note bad">${esc(err.message)}</div>`; el.disabled = false; } break; }
+    case 'escAddRule': escReadForm(); ESC.config.rules.push({ id: 'r-' + Date.now(), name: 'New rule', priority: 'P3', module: 'Any', levels: [{ name: 'Level 1', percent: 100, notify: ['assignee'], emails: [] }] }); vEscalation(); break;
+    case 'escSave': { escReadForm(); el.disabled = true; try { await api('PUT', '/api/escalation', ESC.config); ESC = await api('GET', '/api/escalation'); toast('Escalation matrix saved'); vEscalation(); } catch (err) { $('#escMsg').innerHTML = `<div class="note bad">${esc(err.message)}</div>`; el.disabled = false; } break; }
+    case 'escalateNow': modal(`<form id="escForm"><div class="mh"><div><h3>Escalate ${esc(UI.openId)}?</h3><p>Everyone in the next escalation level is emailed now.</p></div><button type="button" class="btn btn-sm btn-ghost x" data-act="closeModal" aria-label="Close">${ico('x')}</button></div><div class="mb"><label class="f">Reason <span class="muted" style="font-weight:500">optional</span><textarea class="in" id="escReason" style="min-height:70px" placeholder="e.g. Plant 1100 dispatch blocked, needs senior consultant"></textarea></label><div id="escErr"></div><div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn" data-act="closeModal">Cancel</button><button class="btn btn-grad" type="submit">${ico('up')}Escalate</button></div></div></form>`, 'small'); break;
     case 'userMenu': userMenu(); break;
     case 'signOut': await fetch('/api/auth/logout', { method: 'POST' }); location.href = '/'; break;
     case 'copyUpload': { try { const { link } = await api('GET', `/api/tickets/${UI.openId}/upload-link`); try { await navigator.clipboard.writeText(link); toast('Upload link copied — paste it into an email to the requester'); } catch { modal(`<div class="mh"><div><h3>Requester upload link</h3><p>Copy this and send it to the requester.</p></div><button class="btn btn-sm btn-ghost x" data-act="closeModal">${ico('x')}</button></div><div class="mb"><input class="in mono" value="${esc(link)}" readonly onclick="this.select()"></div>`, 'small'); } } catch (err) { toast(err.message, true); } break; }
@@ -1042,6 +1184,7 @@ document.addEventListener('submit', ev => {
   ev.preventDefault();
   if (ev.target.id === 'cForm') sendCompose();
   if (ev.target.id === 'labForm') runLab();
+  if (ev.target.id === 'escForm') { const b = ev.target.querySelector('[type=submit]'); b.disabled = true; api('POST', `/api/tickets/${UI.openId}/escalate`, { reason: $('#escReason').value }).then(e => { closeModal(); toast(`Escalated to ${e.name}`); }).catch(err => { $('#escErr').innerHTML = `<div class="note bad">${esc(err.message)}</div>`; b.disabled = false; }); return; }
   if (ev.target.id === 'licForm') { applyLicense(ev.target); return; }
   if (ev.target.id === 'userForm') { saveUser(ev.target); return; }
   if (ev.target.id === 'imapForm') { saveMail('imap', ev.target); return; }
